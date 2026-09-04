@@ -1,0 +1,14 @@
+name: Tests report
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+jobs:
+  report:
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+    uses: zs-dima/.github/.github/workflows/test-report.yml@v1

@@ -1,0 +1,12 @@
+.github/
+.vscode/
+.dart_tool/
+build/
+coverage/
+reports/
+pubspec.lock
+pubspec_overrides.yaml
+AGENTS.md
+Makefile
+dart_test.yaml
+.metadata

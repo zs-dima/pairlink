@@ -1,0 +1,14 @@
+# Dart / pub
+.dart_tool/
+build/
+# A library does not commit a lockfile: https://dart.dev/guides/libraries/private-files
+pubspec.lock
+# Local development against a sibling checkout. Never committed — CI must resolve the git tag.
+pubspec_overrides.yaml
+coverage/
+reports/
+
+# Editors
+.idea/
+*.iml
+.DS_Store

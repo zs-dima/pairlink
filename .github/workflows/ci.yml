@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "bin/**"
+      - "lib/**"
+      - "test/**"
+      - "example/**"
+      - "pubspec.yaml"
+      - "analysis_options.yaml"
+      - "dart_test.yaml"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "bin/**"
+      - "lib/**"
+      - "test/**"
+      - "example/**"
+      - "pubspec.yaml"
+      - "analysis_options.yaml"
+      - "dart_test.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    # One recipe for every package repository, pinned to a tag (zs-dima/.github).
+    uses: zs-dima/.github/.github/workflows/dart-package.yml@v1

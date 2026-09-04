@@ -1,0 +1,42 @@
+{
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [
+      120
+    ],
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.selectionHighlight": false,
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.suggestSelection": "first",
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off"
+  },
+  "dart.lineLength": 120,
+  "dart.doNotFormat": [
+    "**.g.dart"
+  ],
+  "search.exclude": {
+    ".dart_tool": true,
+    "build": true,
+    "coverage": true,
+    "reports": true
+  },
+  "files.watcherExclude": {
+    ".dart_tool": true,
+    "build": true,
+    "coverage": true,
+    "reports": true
+  },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "pubspec.yaml": ".metadata, .dart_tool, .flutter-plugins-dependencies, pubspec.lock, pubspec_overrides.yaml, analysis_options.yaml, dart_test.yaml, .pubignore",
+    ".gitignore": ".gitattributes, .gitmodules",
+    "README.md": "AGENTS.md, CHANGELOG.md, LICENSE, Makefile",
+    "*.dart": "$(capture).g.dart, $(capture).freezed.dart"
+  }
+}

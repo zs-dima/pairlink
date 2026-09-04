@@ -1,0 +1,18 @@
+name: Publish
+
+# pub.dev publishing through OIDC, with no secret in this repository.
+#
+# Before the tag trigger is enabled: publish the first version by hand, then turn on automated
+# publishing for the package on pub.dev with the tag pattern `v{{version}}`, then uncomment
+# the trigger below.
+on:
+  workflow_dispatch:
+  # push:
+  #   tags:
+  #     - "v[0-9]+.[0-9]+.[0-9]+*"
+
+jobs:
+  publish:
+    permissions:
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
