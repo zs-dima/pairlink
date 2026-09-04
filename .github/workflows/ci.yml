@@ -30,5 +30,5 @@ concurrency:
 
 jobs:
   ci:
-    # One recipe for every package repository, pinned to a tag (zs-dima/.github).
-    uses: zs-dima/.github/.github/workflows/dart-package.yml@v1
+    # One recipe for every package repository, pinned to a tag (zs-dima/lints_tool).
+    uses: zs-dima/lints_tool/.github/workflows/dart-package.yml@v1

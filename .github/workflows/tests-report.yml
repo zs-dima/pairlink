@@ -11,4 +11,4 @@ jobs:
       contents: read
       actions: read
       checks: write
-    uses: zs-dima/.github/.github/workflows/test-report.yml@v1
+    uses: zs-dima/lints_tool/.github/workflows/test-report.yml@v1
