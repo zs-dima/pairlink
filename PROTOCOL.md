@@ -39,6 +39,7 @@ equal.
 |---|---|---|---|
 | QR (primary) | 128 random bits (`PairSecret.kScannedBytes`) | outlet phone, displayed as `<scheme>://pair?h=&p=&k=` (`PairInvite`, scheme from `PairIdentity`) | none: the QR carries the address |
 | Typed code (fallback) | 4 digits (`PairSecret.kCodeLength`), `Random.secure` | panel phone, user types it on the outlet phone | mDNS via the platform responder (`bonsoir`); a hand-rolled UDP beacon is not an option, iOS gates it behind an entitlement |
+| Remembered | the scanned secret of a completed pairing, kept by the APPLICATION and never by this package | nobody — the two phones already share it | mDNS, with `id=` in the TXT record (`PairSecret.pairId`): which pairing this listener waits for, never anything about the key. Only a scanned secret has one |
 
 **INVARIANT (PairSecret):** the secret travels out of band only, never over the network in any form.
 The handshake proves possession with a MAC, so a passive listener does not learn even the four-digit

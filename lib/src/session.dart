@@ -700,8 +700,20 @@ final class PanelSession {
         if (!handshake.isCompleted) handshake.complete(false);
       },
       onDone: () {
-        if (!handshake.isCompleted) handshake.complete(false);
+        // A handshake that never completed is not a DROP: `attach` reports that by returning
+        // false, and the peer that hung up mid-handshake was never paired. Emitting a disconnect
+        // there made a failed reconnect attempt look like a fresh outage.
+        if (!handshake.isCompleted) {
+          handshake.complete(false);
+          return;
+        }
         _emit(const PanelDisconnected());
+        // Detach with the report, the way the `bye` and idle paths do. Without this the idle
+        // timer stayed armed and fired fifteen seconds later, so ONE dropped socket was reported
+        // TWICE — and the second report arrived after the consumer had finished reacting to the
+        // first, which bought a second reconnect budget (BreakerSonar, found on hardware
+        // 2026-09-05).
+        _detach().ignore();
       },
     );
 

@@ -4,7 +4,7 @@ description: >
   Local-network pairing between two phones over TCP: an out-of-band secret, a nonce-bound
   HMAC handshake, replay rejection, heartbeats and takeover. Pure Dart.
 
-version: 0.1.0
+version: 0.2.0
 
 homepage: https://github.com/zs-dima/pairlink
 repository: https://github.com/zs-dima/pairlink

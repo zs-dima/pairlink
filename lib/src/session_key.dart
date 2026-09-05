@@ -38,6 +38,11 @@ final class PairSecret {
   /// all sized against it.
   static const int kCodeLength = 4;
 
+  /// Length in bytes of [pairId]. Four is enough to tell one home's pairing from another's on a
+  /// shared network, and short enough to stay inside a TXT record without inviting anyone to read
+  /// it as a fingerprint.
+  static const int kPairIdBytes = 4;
+
   const PairSecret._(this._material, this.strength);
 
   /// 128 random bits, for the QR path.
@@ -84,6 +89,28 @@ final class PairSecret {
 
   /// The QR payload form. Only meaningful for a generated secret.
   String toBase64Url() => base64Url.encode(_material);
+
+  /// A public name for this pairing: the first [kPairIdBytes] of HMAC-SHA256 over the secret, hex.
+  ///
+  /// Null for a typed code, BY CONSTRUCTION and not by policy. Thirty-two bits of a keyed hash
+  /// over 128 random bits say nothing about the key; the same hash over four digits is a
+  /// ten-thousand-row lookup table anyone could build, which is the finding that took the code
+  /// out of the TXT record in the first place (`docs/skeptic-m2.md`, finding 6).
+  ///
+  /// What it is for: two phones that remember each other can recognise each other before they
+  /// connect. Publishing it costs nothing a passive listener does not already have — it is
+  /// unlinkable to the secret — and it saves every OTHER phone on the network from spending an
+  /// attempt on a handshake that could never verify.
+  String? pairId({required String brand}) => switch (strength) {
+    .typed => null,
+    .scanned =>
+      Hmac(sha256, _material)
+          .convert(utf8.encode('$brand-pairlink-id'))
+          .bytes
+          .take(kPairIdBytes)
+          .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+          .join(),
+  };
 
   /// Derives the key for one connection, binding both nonces and the application's brand
   /// ([PairIdentity.brand]).

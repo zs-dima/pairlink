@@ -9,6 +9,42 @@ import 'fixture.dart';
 /// Every property is stated in terms of what an uninvited peer holds, not what a function returns:
 /// probing an already-established key proves nothing about the handshake.
 void main() {
+  group('pairId', () {
+    // A public name for a pairing, so two phones that already know each other can recognise each
+    // other before they connect — and every OTHER phone on the network can be skipped instead of
+    // spending one of its five attempts on a handshake that could never verify.
+    test('a scanned secret has a stable, brand-bound id', () {
+      final secret = PairSecret.generate();
+
+      final id = secret.pairId(brand: 'breakersonar');
+      expect(id, isNotNull);
+      expect(id, hasLength(PairSecret.kPairIdBytes * 2), reason: 'four bytes, hex');
+      expect(id, matches(RegExp(r'^[0-9a-f]+$')));
+      expect(secret.pairId(brand: 'breakersonar'), equals(id), reason: 'stable across calls');
+      expect(secret.pairId(brand: 'otherapp'), isNot(equals(id)), reason: 'and bound to the brand');
+    });
+
+    test('two secrets get different ids', () {
+      expect(
+        PairSecret.generate().pairId(brand: 'breakersonar'),
+        isNot(equals(PairSecret.generate().pairId(brand: 'breakersonar'))),
+      );
+    });
+
+    test('a typed code has NO id', () {
+      // Thirty-two bits of a keyed hash over four digits is a ten-thousand-row lookup table, which
+      // is exactly the finding that took the code out of the TXT record. Null by construction, so
+      // no caller can publish one by accident.
+      expect(PairSecret.code('4242').pairId(brand: 'breakersonar'), isNull);
+    });
+
+    test('a restored scanned secret keeps the id it was generated with', () {
+      final secret = PairSecret.generate();
+      final restored = PairSecret.fromBase64Url(secret.toBase64Url());
+      expect(restored.pairId(brand: 'breakersonar'), equals(secret.pairId(brand: 'breakersonar')));
+    });
+  });
+
   const hostNonce = 'aG9zdC1ub25jZQ==';
   const guestNonce = 'Z3Vlc3Qtbm9uY2U=';
 

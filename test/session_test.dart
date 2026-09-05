@@ -517,6 +517,33 @@ void main() {
       expect(panelEvents.whereType<PanelDisconnected>(), isNotEmpty);
     });
 
+    test('and reported ONCE — the idle timer does not report the same drop again', () async {
+      // `onDone` used to emit without detaching, so the idle timer stayed armed and fired again a
+      // few seconds later. A consumer that answers a drop with a BOUNDED retry loop got the second
+      // copy after it had finished with the first, and started over with a fresh budget: the
+      // "stopped trying to reconnect, then connected on its own" shape BreakerSonar saw on two
+      // phones, 2026-09-05.
+      final link = wire();
+      final secret = scanned();
+      final outlet = OutletSession(identity: kTestIdentity, secret: secret, idleTimeout: const Duration(days: 1));
+      final panel = PanelSession(
+        identity: kTestIdentity,
+        secret: secret,
+        idleTimeout: const Duration(milliseconds: 60),
+      );
+      final panelEvents = collect(panel.events);
+
+      unawaited(outlet.attach(link.outlet));
+      await panel.attach(link.panel);
+      await link.panel.close();
+      // Well past the idle timeout, which is where the second report used to come from.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await settle();
+
+      expect(panelEvents.whereType<PanelDisconnected>(), hasLength(1), reason: 'one socket, one report');
+      expect(panel.isPaired, isFalse, reason: 'and it detached with the report');
+    });
+
     test('a graceful bye is distinguishable from a drop', () async {
       final link = wire();
       final secret = scanned();

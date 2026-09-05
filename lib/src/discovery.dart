@@ -7,7 +7,7 @@ import 'package:meta/meta.dart';
 @immutable
 final class PairEndpoint {
   /// Creates a [PairEndpoint].
-  const PairEndpoint({required this.host, required this.port});
+  const PairEndpoint({required this.host, required this.port, this.id});
 
   /// Address on this LAN.
   final String host;
@@ -15,15 +15,23 @@ final class PairEndpoint {
   /// TCP port the outlet phone is listening on.
   final int port;
 
+  /// Public name of the PAIRING this listener is waiting for, or null when it does not say.
+  ///
+  /// [PairSecret.pairId] derives it, and only a scanned secret has one. It is not a credential
+  /// and proves nothing: it lets a phone that remembers a pairing skip the listeners that are
+  /// waiting for somebody else, so a wrong guess never costs a stranger one of their five
+  /// attempts — and it lets a typed-code search skip the ones it could never satisfy.
+  final String? id;
+
   @override
-  int get hashCode => Object.hash(host, port);
+  int get hashCode => Object.hash(host, port, id);
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) || other is PairEndpoint && other.host == host && other.port == port;
+      identical(this, other) || other is PairEndpoint && other.host == host && other.port == port && other.id == id;
 
   @override
-  String toString() => '$host:$port';
+  String toString() => id == null ? '$host:$port' : '$host:$port#$id';
 }
 
 /// Publishes where the outlet phone can be reached.
@@ -51,8 +59,9 @@ abstract interface class PairDiscovery {
   /// caller de-duplicates on [PairEndpoint] equality.
   Stream<PairEndpoint> get endpoints;
 
-  /// Starts looking. There is nothing to filter on: an advertisement says only that an outlet
-  /// phone is here, so the caller tries the candidates and lets the handshake decide.
+  /// Starts looking. An advertisement says an outlet phone is here and, when it is waiting for a
+  /// remembered pairing, which pairing that is ([PairEndpoint.id]) — never anything about the
+  /// secret. The caller filters on that if it can and lets the handshake decide the rest.
   Future<void> start();
 
   /// Stops looking.
