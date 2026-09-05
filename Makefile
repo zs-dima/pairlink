@@ -44,6 +44,17 @@ check: analyze publish-check ## everything CI runs except the tests
 outdated: get ## outdated dependencies
 	@dart pub outdated
 
+.PHONY: release
+release: ## release VERSION=x.y.z: gate, bump, commit, tag, push; the tag publishes
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=0.2.0"; exit 2; }
+	@test -z "$$(git status --porcelain --untracked-files=no)" || { echo "commit or stash first: the tree is dirty"; exit 1; }
+	@grep -q "^## \[$(VERSION)\]" CHANGELOG.md || { echo "CHANGELOG.md has no section for $(VERSION)"; exit 1; }
+	@$(MAKE) --no-print-directory check test
+	@sed -i "s|^version: .*|version: $(VERSION)|" pubspec.yaml
+	@git commit --quiet -am "$(VERSION)" && git tag "v$(VERSION)"
+	@git push --quiet origin HEAD && git push --quiet origin "v$(VERSION)"
+	@echo "pushed v$(VERSION); watch the Deploy workflow"
+
 .PHONY: publish
 publish: check test ## publish to pub.dev
 	@dart pub publish
