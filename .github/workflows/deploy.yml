@@ -1,18 +1,22 @@
-name: Publish
+name: Deploy
 
-# pub.dev publishing through OIDC, with no secret in this repository.
+# Publishes to pub.dev through OIDC, with no token stored in this repository. The reusable
+# workflow checks out, sets up Dart and Flutter, resolves, runs `pub publish --dry-run` and then
+# publishes, so it serves a Flutter package as well as a pure-Dart one.
 #
-# Before the tag trigger is enabled: publish the first version by hand, then turn on automated
-# publishing for the package on pub.dev with the tag pattern `v{{version}}`, then uncomment
-# the trigger below.
+# It starts working once the package exists on pub.dev: publish the first version by hand
+# (`dart pub publish`), then enable automated publishing on the package's Admin tab with the
+# repository `zs-dima/<package>` and the tag pattern `v{{version}}`. From then on a pushed tag
+# whose version matches `pubspec.yaml` releases by itself.
 on:
   workflow_dispatch:
-  # push:
-  #   tags:
-  #     - "v[0-9]+.[0-9]+.[0-9]+*"
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
 
 jobs:
-  publish:
+  deploy:
+    name: Deploy to pub.dev
     permissions:
-      id-token: write
+      id-token: write # Required for authentication using OIDC
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
