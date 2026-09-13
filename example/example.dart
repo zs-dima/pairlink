@@ -27,14 +27,30 @@ Future<void> main() async {
   final scanned = PairInvite.tryParse(invite.toUri().toString(), identity: identity)!;
   final panel = PanelSession(identity: identity, secret: scanned.secret, device: 'panel');
   final events = panel.events.listen((event) => print('panel: ${event.runtimeType}'));
+  // Anything that is not a power event: carried opaquely, so a consumer adds a wire feature
+  // without a new frame.
+  final outletHeard = outlet.events.listen(
+    (event) => switch (event) {
+      OutletPeerShared(:final key, :final value) => print('outlet: $key is now $value'),
+      OutletPeerSignal(:final name) => print('outlet: the panel asked for "$name"'),
+      _ => null,
+    },
+  );
   final paired = await panel.attach(
     SocketTransport(await Socket.connect(scanned.endpoint.host, scanned.endpoint.port)),
   );
   print('paired: $paired (${scanned.secret.strength.name})');
 
   outlet.report(.lost);
+
+  panel
+    // State: re-asserted on every reconnect. The receiver must ignore a repeat — see `Shared`.
+    ..share(key: 'relocating', value: true)
+    // A request, carried once, never replayed.
+    ..signal('siren');
   await Future<void>.delayed(const Duration(milliseconds: 100));
 
+  await outletHeard.cancel();
   await events.cancel();
   await panel.close();
   await outlet.close();

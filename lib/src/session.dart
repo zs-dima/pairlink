@@ -119,6 +119,27 @@ final class OutletDelivered extends OutletEvent {
   final int seq;
 }
 
+/// The peer shared a named value. See [Shared] — a repeat must not be acted on.
+final class OutletPeerShared extends OutletEvent {
+  /// {@macro outlet_event}
+  const OutletPeerShared({required this.key, required this.value});
+
+  /// The peer's name for this value. An unknown one is ignored, never refused.
+  final String key;
+
+  /// A `bool`, `num`, `String` or null.
+  final Object? value;
+}
+
+/// The peer asked for something once. See [Signal].
+final class OutletPeerSignal extends OutletEvent {
+  /// {@macro outlet_event}
+  const OutletPeerSignal(this.name);
+
+  /// The peer's name for this request. An unknown one is ignored, never refused.
+  final String name;
+}
+
 /// The outlet phone's half of a pairing session: the listening side.
 ///
 /// It listens because it is the phone that stays put, and a client that reconnects to a fixed
@@ -167,6 +188,10 @@ final class OutletSession {
   /// Arms while a peer is paired; every MAC-verified inbound frame rewinds it.
   Timer? _idleTimer;
   int _seq = 0;
+
+  /// What THIS side has shared, for re-assertion on the next [attach]. Nothing the peer sends is
+  /// stored here, so a peer cannot drive an allocation.
+  final Map<String, Object?> _shared = <String, Object?>{};
 
   /// See [kIdleTimeout]; injectable so a test can drive staleness without waiting.
   final Duration idleTimeout;
@@ -294,6 +319,12 @@ final class OutletSession {
     for (final queued in _queue) {
       _send(queued);
     }
+
+    // Re-asserted rather than queued: the peer needs the value NOW, and a stale one replayed out
+    // of a queue would be a lie. The receiver must ignore a repeat — see [Shared].
+    for (final entry in _shared.entries) {
+      _shareNow(entry.key, entry.value);
+    }
     return true;
   }
 
@@ -311,6 +342,32 @@ final class OutletSession {
     _send(frame);
   }
 
+  /// Shares a named value with the peer. See [Shared].
+  ///
+  /// [value] must be a scalar or this throws [ArgumentError] — a real check, not an assertion,
+  /// because it is a wire contract and assertions are stripped in release.
+  ///
+  /// Re-sharing the current value does nothing, so a caller may assert freely. Sharing while the
+  /// link is down stores without sending; the next [attach] re-asserts it.
+  void share({required String key, required Object? value}) {
+    if (value != null && value is! bool && value is! num && value is! String) {
+      throw ArgumentError.value(value, 'value', 'must be bool, num, String or null');
+    }
+    if (_shared.containsKey(key) && _shared[key] == value) return;
+    _shared[key] = value;
+    _shareNow(key, value);
+  }
+
+  /// Asks the peer for something once. See [Signal].
+  ///
+  /// Dropped when the link is down: a request that must survive a reconnect is state, so [share]
+  /// it instead.
+  void signal(String name) {
+    final connection = _paired;
+    if (connection == null) return;
+    _send(Signal(name: name, n: ++connection.outN));
+  }
+
   /// Ends the session for good.
   Future<void> close() async {
     _send(const Bye());
@@ -320,7 +377,14 @@ final class OutletSession {
       await connection.close();
     }
     _pending.clear();
+    _shared.clear();
     if (!_controller.isClosed) await _controller.close();
+  }
+
+  void _shareNow(String key, Object? value) {
+    final connection = _paired;
+    if (connection == null) return;
+    _send(Shared(key: key, value: value, n: ++connection.outN));
   }
 
   void _onFrame(ReceivedFrame received, _Connection connection) {
@@ -360,6 +424,16 @@ final class OutletSession {
       case Bye():
         _emit(OutletPeerLeft(graceful: true, queued: _queue.length));
         _detach().ignore();
+
+      case Shared():
+        if (frame.n <= connection.lastInN) return;
+        connection.lastInN = frame.n;
+        _emit(OutletPeerShared(key: frame.key, value: frame.value));
+
+      case Signal():
+        if (frame.n <= connection.lastInN) return;
+        connection.lastInN = frame.n;
+        _emit(OutletPeerSignal(frame.name));
 
       case Hello():
       case Challenge():
@@ -517,6 +591,17 @@ final class _Connection {
   /// injectable clock so a test can drive staleness without waiting.
   int lastVerifiedAtMs = 0;
 
+  /// Counter stamped on outbound [Shared] and [Signal] frames.
+  ///
+  /// Per connection, NOT per session like [Power.seq]: those are replayed across connections, these
+  /// never are, and the key is derived per connection so a captured frame fails on the next one.
+  /// Per-session would break the feature after a takeover — the winner starts at 1 and reads
+  /// stale forever.
+  int outN = 0;
+
+  /// Highest counter accepted from the peer on THIS connection; anything at or below is replay.
+  int lastInN = 0;
+
   // ignore: cancel_subscriptions, cancelled in close(), which every exit path calls.
   StreamSubscription<ReceivedFrame>? subscription;
 
@@ -612,6 +697,27 @@ final class PanelGaveUp extends PanelEvent {
   final bool peerEnded;
 }
 
+/// The peer shared a named value. See [Shared] — a repeat must not be acted on.
+final class PanelPeerShared extends PanelEvent {
+  /// {@macro panel_event}
+  const PanelPeerShared({required this.key, required this.value});
+
+  /// The peer's name for this value. An unknown one is ignored, never refused.
+  final String key;
+
+  /// A `bool`, `num`, `String` or null.
+  final Object? value;
+}
+
+/// The peer asked for something once. See [Signal].
+final class PanelPeerSignal extends PanelEvent {
+  /// {@macro panel_event}
+  const PanelPeerSignal(this.name);
+
+  /// The peer's name for this request. An unknown one is ignored, never refused.
+  final String name;
+}
+
 /// The panel phone's half of a pairing session: the connecting side.
 ///
 /// It outlives the connection too: a Wi-Fi drop or a rebooted router ends a socket, not a session.
@@ -643,6 +749,16 @@ final class PanelSession {
 
   /// Per-connection ping counter: reset on every [attach], echoed back in [Pong].
   int _pingCounter = 0;
+
+  /// Counter stamped on outbound [Shared] and [Signal] frames; per connection, reset on [attach].
+  /// See the outlet half's equivalent for why.
+  int _messageCounter = 0;
+
+  /// Highest counter accepted from the peer on this connection; anything at or below is replay.
+  int _lastInN = 0;
+
+  /// What THIS side has shared, for re-assertion on the next [attach].
+  final Map<String, Object?> _shared = <String, Object?>{};
 
   // Cancelled in _detach(), through a local: ownership is taken before the first await, so a
   // reconnect cannot be torn down by the old teardown finishing after it.
@@ -686,6 +802,8 @@ final class PanelSession {
     _transport = transport;
     _key = null;
     _pingCounter = 0;
+    _messageCounter = 0;
+    _lastInN = 0;
 
     final handshake = _handshake = Completer<bool>();
     _subscription = transport.frames.listen(
@@ -728,11 +846,33 @@ final class PanelSession {
   }
 
   /// Says goodbye and stops.
+  /// Shares a named value with the peer. See [Shared], and [OutletSession.share] for the contract.
+  void share({required String key, required Object? value}) {
+    if (value != null && value is! bool && value is! num && value is! String) {
+      throw ArgumentError.value(value, 'value', 'must be bool, num, String or null');
+    }
+    if (_shared.containsKey(key) && _shared[key] == value) return;
+    _shared[key] = value;
+    _shareNow(key, value);
+  }
+
+  /// Asks the peer for something once. See [Signal], and [OutletSession.signal] for the contract.
+  void signal(String name) {
+    if (!isPaired) return;
+    _send(Signal(name: name, n: ++_messageCounter));
+  }
+
   Future<void> close() async {
     _send(const Bye());
     await _detach();
     _key = null;
+    _shared.clear();
     if (!_controller.isClosed) await _controller.close();
+  }
+
+  void _shareNow(String key, Object? value) {
+    if (!isPaired) return;
+    _send(Shared(key: key, value: value, n: ++_messageCounter));
   }
 
   // One branch per frame type; splitting the dispatcher would hide the protocol's shape.
@@ -771,6 +911,10 @@ final class PanelSession {
       case Ping():
       case Pong():
       case Bye():
+      // Fall through to the MAC wall below: these carry the application's controls, so an
+      // unsigned one would hand a stranger whatever they drive.
+      case Shared():
+      case Signal():
         break;
     }
 
@@ -783,6 +927,10 @@ final class PanelSession {
     switch (frame) {
       case Welcome():
         _startHeartbeat();
+        // The panel's catch-up point, twin of the outlet's queue replay in `attach`.
+        for (final entry in _shared.entries) {
+          _shareNow(entry.key, entry.value);
+        }
         _emit(PanelPaired(device: frame.device, strength: secret.strength));
         if (!handshake.isCompleted) handshake.complete(true);
 
@@ -792,6 +940,16 @@ final class PanelSession {
       case Bye():
         _emit(const PanelDisconnected(graceful: true));
         _detach().ignore();
+
+      case Shared():
+        if (frame.n <= _lastInN) return;
+        _lastInN = frame.n;
+        _emit(PanelPeerShared(key: frame.key, value: frame.value));
+
+      case Signal():
+        if (frame.n <= _lastInN) return;
+        _lastInN = frame.n;
+        _emit(PanelPeerSignal(frame.name));
 
       // Pong is expected traffic: liveness was stamped above and its counter is only for logs.
       // The rest are frames this role does not receive.

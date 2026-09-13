@@ -224,4 +224,25 @@ void main() {
       expect(connected.victim.delivered, isEmpty);
     });
   });
+
+  group('unsigned application messages against the panel', () {
+    test('an unsigned shared or signal from an unauthenticated server is ignored', () async {
+      // Pins that the unsigned-accept set is still exactly `challenge` and `reject`. On the code
+      // path the panel dials whatever answered an mDNS browse, so a server holding no secret is
+      // the ordinary case.
+      final connected = await against(PairSecret.code(code), (peer) async {
+        peer.frame(<String, Object?>{'v': kPairlinkVersion, 't': 'challenge', 'nonce': fakeNonce()});
+        await peer.nextFrame();
+        for (var n = 1; n <= 5; n++) {
+          peer
+            ..frame(<String, Object?>{'t': 'shared', 'key': 'relocating', 'value': true, 'n': n})
+            ..frame(<String, Object?>{'t': 'signal', 'name': 'siren', 'n': n});
+        }
+      });
+
+      expect(connected.paired, isFalse);
+      expect(connected.victim.events.whereType<PanelPeerShared>(), isEmpty);
+      expect(connected.victim.events.whereType<PanelPeerSignal>(), isEmpty);
+    });
+  });
 }

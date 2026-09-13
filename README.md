@@ -49,6 +49,36 @@ share a key space; `serviceType` is what the platform's mDNS responder advertise
 QR payload's URI scheme. Discovery itself is the application's job: implement `PairAdvertiser` and
 `PairDiscovery` over the platform responder (NsdManager, Bonjour).
 
+## Saying something of your own
+
+Power events are this package's one domain concept. Everything else rides on two primitives it
+carries and never reads, so a feature of your own costs no protocol version and no release here:
+
+```dart
+// State. Re-asserted on every reconnect, so a peer that comes back learns the current value.
+panel.share(key: 'relocating', value: true);
+
+// A request, carried once. Never stored, never queued, dropped with the link.
+panel.signal('siren');
+
+outlet.events.listen((event) => switch (event) {
+  OutletPeerShared(:final key, :final value) => apply(key, value),
+  OutletPeerSignal(:final name) => perform(name),
+  _ => null,
+});
+```
+
+Both work in either direction and both are signed like every post-handshake frame. Values are
+scalars (`bool`, `num`, `String`, null); anything else throws, because the MAC covers a
+canonicalization that sorts top-level keys only.
+
+Three rules the compiler cannot enforce:
+
+- **Ignore a repeated shared value** — re-assertion means the link came back, not that anything
+  changed. Restart a timer on every delivery and a flapping link extends it without end.
+- **Ignore an unknown key or name**, never refuse it, so your vocabulary stays additive.
+- **A request that must survive a reconnect is state** — share it instead of signalling it.
+
 ## Testing
 
 `dart test`. The suite includes `test/skeptic/`, an adversarial peer implemented independently of
@@ -63,7 +93,7 @@ dependencies:
   pairlink:
     git:
       url: https://github.com/zs-dima/pairlink.git
-      ref: v0.1.0
+      ref: v0.3.0
 ```
 
 ## Changelog

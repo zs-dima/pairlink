@@ -576,6 +576,194 @@ void main() {
       expect(events.whereType<PanelDisconnected>().first.graceful, isTrue);
     });
   });
+
+  group('application messages', () {
+    /// Both halves attached and talking. Flat rather than nesting the `wire()` record.
+    Future<({OutletSession outlet, PanelSession panel, _Wire outletWire, _Wire panelWire})> paired() async {
+      final link = wire();
+      final secret = scanned();
+      final outlet = OutletSession(identity: kTestIdentity, secret: secret);
+      final panel = PanelSession(identity: kTestIdentity, secret: secret);
+      unawaited(outlet.attach(link.outlet));
+      await panel.attach(link.panel);
+      await settle();
+      return (outlet: outlet, panel: panel, outletWire: link.outlet, panelWire: link.panel);
+    }
+
+    test('a shared value travels panel to outlet, and back the other way', () async {
+      final session = await paired();
+      final onOutlet = collect(session.outlet.events);
+      final onPanel = collect(session.panel.events);
+
+      session.panel.share(key: 'relocating', value: true);
+      session.outlet.share(key: 'mains', value: false);
+      await settle();
+
+      final toOutlet = onOutlet.whereType<OutletPeerShared>().single;
+      expect((toOutlet.key, toOutlet.value), equals(('relocating', true)));
+      final toPanel = onPanel.whereType<PanelPeerShared>().single;
+      expect((toPanel.key, toPanel.value), equals(('mains', false)));
+    });
+
+    test('a signal travels and carries nothing but its name', () async {
+      final session = await paired();
+      final onOutlet = collect(session.outlet.events);
+
+      session.panel.signal('siren');
+      await settle();
+
+      expect(onOutlet.whereType<OutletPeerSignal>().single.name, equals('siren'));
+    });
+
+    test('sharing the value it already has puts nothing on the wire', () async {
+      final session = await paired();
+      session.panel.share(key: 'relocating', value: true);
+      await settle();
+      final before = session.panelWire.sent.whereType<Shared>().length;
+
+      session.panel.share(key: 'relocating', value: true);
+      await settle();
+
+      expect(session.panelWire.sent.whereType<Shared>(), hasLength(before));
+    });
+
+    test('an explicit null is a value, not an absence', () async {
+      final session = await paired();
+      final onOutlet = collect(session.outlet.events);
+
+      session.panel.share(key: 'room', value: null);
+      await settle();
+
+      expect(onOutlet.whereType<OutletPeerShared>().single.value, isNull);
+    });
+
+    test('a non-scalar is refused at the call, not on the wire', () async {
+      final session = await paired();
+
+      // A real check, not an assertion: assertions are stripped in release.
+      expect(() => session.panel.share(key: 'k', value: <String, Object?>{'room': 'kitchen'}), throwsArgumentError);
+      expect(() => session.panel.share(key: 'k', value: <int>[1, 2]), throwsArgumentError);
+    });
+
+    test('an unknown key still reaches the application', () async {
+      final session = await paired();
+      final onOutlet = collect(session.outlet.events);
+
+      // The decision to ignore belongs to the application, so the package must deliver it.
+      session.panel.share(key: 'a-word-this-version-never-heard-of', value: 1);
+      await settle();
+
+      expect(onOutlet.whereType<OutletPeerShared>(), hasLength(1));
+    });
+
+    test('a signal sent while the link is down is dropped, not queued', () async {
+      final link = wire();
+      final secret = scanned();
+      final outlet = OutletSession(identity: kTestIdentity, secret: secret);
+      final panel = PanelSession(identity: kTestIdentity, secret: secret);
+
+      unawaited(outlet.attach(link.outlet));
+      final onOutlet = collect(outlet.events);
+
+      // Sent with no transport at all: dropped, not held — late is the wrong moment.
+      panel.signal('siren');
+      await panel.attach(link.panel);
+      await settle();
+
+      expect(onOutlet.whereType<OutletPeerSignal>(), isEmpty);
+    });
+
+    test('shared state is re-asserted on the next connection, never queued', () async {
+      final secret = scanned();
+      final outlet = OutletSession(identity: kTestIdentity, secret: secret);
+      final panel = PanelSession(identity: kTestIdentity, secret: secret);
+
+      final link = wire();
+      final onOutlet = collect(outlet.events);
+
+      // Shared while there is nothing to send it over.
+      panel.share(key: 'relocating', value: true);
+      unawaited(outlet.attach(link.outlet));
+      await panel.attach(link.panel);
+      await settle();
+
+      expect(
+        onOutlet.whereType<OutletPeerShared>().single.value,
+        isTrue,
+        reason: 'a peer that connects must learn the value it missed',
+      );
+      expect(
+        link.panel.sent.whereType<Shared>(),
+        hasLength(1),
+        reason: 're-asserted once, not queued and replayed as a backlog',
+      );
+    });
+
+    test('a reconnect re-asserts the CURRENT value, not the one that was live when it dropped', () async {
+      final secret = scanned();
+      final outlet = OutletSession(identity: kTestIdentity, secret: secret);
+      final panel = PanelSession(identity: kTestIdentity, secret: secret);
+
+      final first = wire();
+      unawaited(outlet.attach(first.outlet));
+      await panel.attach(first.panel);
+      await settle();
+      panel.share(key: 'relocating', value: true);
+      await settle();
+
+      await first.outlet.close();
+      await settle();
+      // Changed while nobody could hear it. A queue would deliver the stale `true` as well.
+      panel.share(key: 'relocating', value: false);
+
+      // The reconnect happens over a new connection: wire() mints a fresh transport pair.
+      // ignore: avoid-duplicate-initializers
+      final second = wire();
+      final onOutlet = collect(outlet.events);
+      unawaited(outlet.attach(second.outlet));
+      await panel.attach(second.panel);
+      await settle();
+
+      expect(onOutlet.whereType<OutletPeerShared>().map((e) => e.value), equals(<Object?>[false]));
+    });
+
+    test('a takeover by a second peer does not break sharing', () async {
+      // Why the counter is per CONNECTION: per session, the winner would start at 1 against the
+      // receiver's old high-water mark and every frame would read as stale. Only a takeover shows
+      // it, and no ordinary test performs one.
+      final secret = scanned();
+      final outlet = OutletSession(identity: kTestIdentity, secret: secret, takeoverAfter: .zero);
+      final first = wire();
+      final firstPanel = PanelSession(identity: kTestIdentity, secret: secret);
+      unawaited(outlet.attach(first.outlet));
+      await firstPanel.attach(first.panel);
+      await settle();
+
+      // Enough traffic that a per-session counter would be well past 1.
+      for (var i = 0; i < 5; i++) {
+        firstPanel.share(key: 'tick', value: i);
+        await settle();
+      }
+
+      // The takeover arrives over its own connection: wire() mints a fresh transport pair.
+      // ignore: avoid-duplicate-initializers
+      final second = wire();
+      final secondPanel = PanelSession(identity: kTestIdentity, secret: secret);
+      unawaited(outlet.attach(second.outlet));
+      await secondPanel.attach(second.panel);
+      await settle();
+
+      final onOutlet = collect(outlet.events);
+      secondPanel.share(key: 'relocating', value: true);
+      await settle();
+
+      expect(
+        onOutlet.whereType<OutletPeerShared>().map((e) => (e.key, e.value)),
+        equals(<(String, Object?)>[('relocating', true)]),
+        reason: 'the new connection starts its own count, and the receiver starts listening afresh',
+      );
+    });
+  });
 }
 
 /// An in-memory [PairTransport] wired to a peer, with a link that can be cut or made lossy.

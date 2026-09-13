@@ -63,6 +63,38 @@ void main() {
       expect(link.outlet.sent.whereType<Pong>(), isNotEmpty, reason: 'no pong ever went out');
     });
 
+    test('a verified shared counts as life, so application traffic alone holds the link open', () async {
+      // Any MAC-verified frame is proof of life, not just a ping: a link carrying nothing but
+      // application messages is still live.
+      final link = wire();
+      final secret = PairSecret.generate();
+      final outlet = OutletSession(
+        identity: kTestIdentity,
+        secret: secret,
+        idleTimeout: const Duration(milliseconds: 80),
+      );
+      final panel = PanelSession(
+        identity: kTestIdentity,
+        secret: secret,
+        heartbeatInterval: const Duration(days: 1), // no pings: the shares are the only traffic
+        idleTimeout: const Duration(days: 1),
+      );
+      addTearDown(outlet.close);
+      addTearDown(panel.close);
+      final outletEvents = collect(outlet.events);
+
+      unawaited(outlet.attach(link.outlet));
+      expect(await panel.attach(link.panel), isTrue);
+
+      for (var i = 0; i < 6; i++) {
+        panel.share(key: 'tick', value: i);
+        await settle(30);
+      }
+
+      expect(outletEvents.whereType<OutletPeerLeft>(), isEmpty, reason: 'a talking peer was declared dead');
+      expect(outlet.isPaired, isTrue);
+    });
+
     test('outlet idle timeout frees the slot when the panel goes silent, and a fresh attach pairs', () async {
       final link = wire();
       final secret = PairSecret.generate();
@@ -323,7 +355,7 @@ void main() {
   });
 
   group('version mismatch', () {
-    test('a v2 challenge surfaces as PanelRefused(versionMismatch), not a silent timeout', () async {
+    test('a stale outlet challenge surfaces as PanelRefused(versionMismatch), not a silent timeout', () async {
       final link = wire();
       final panel = PanelSession(
         identity: kTestIdentity,
@@ -335,7 +367,8 @@ void main() {
 
       final attachResult = panel.attach(link.panel);
       await settle();
-      // A v2 outlet speaks first with a v2 challenge; this build's codec refuses it locally.
+      // A stale outlet speaks first with its own version's challenge; this build's codec refuses
+      // it locally, so the mismatch never arrives as a wire Reject.
       link.outlet.deliverRaw('{"v":2,"t":"challenge","nonce":"bm9uY2U="}');
       await settle();
 

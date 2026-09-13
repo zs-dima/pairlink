@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-13
+
+### Added
+
+- `Shared` and `Signal`: two application messages this package carries without reading — a named
+  value one peer shares with the other, and a named one-shot request. Both directions, through
+  `share(key:, value:)` and `signal(name)` on either session, arriving as `OutletPeerShared` /
+  `OutletPeerSignal` and `PanelPeerShared` / `PanelPeerSignal`. A consumer can add a wire feature
+  without a protocol bump or a release here.
+  - `Shared` is state: re-asserted on every `attach` rather than queued. **A receiver that acts on
+    one must ignore a repeat** — re-assertion means the link came back, not that anything changed,
+    and one that restarts a timer per delivery lets a flapping link extend it without end.
+  - `Signal` is never stored or queued and is dropped with the link: a command delivered late is
+    executed at the wrong moment.
+  - Values are scalars only (`bool`, `num`, `String`, null): `ArgumentError` on send,
+    `FrameError(malformed)` on receipt. The MAC covers a canonicalization that sorts top-level keys
+    only. A real check, not an assertion, which release builds strip.
+  - Both are signed like every post-handshake frame and join no unsigned-acceptance set. An unknown
+    `key` or `name` is ignored, never refused.
+
+### Changed
+
+- **Breaking:** `kPairlinkVersion` is 4. The session key binds the version, so 3 and 4 cannot pair;
+  a mismatch is still a clean `Reject(versionMismatch)`.
+- **Breaking:** the new sealed subclasses of `PairFrame`, `OutletEvent` and `PanelEvent` break every
+  exhaustive switch over them until it handles them.
+
 ## [0.2.0] - 2026-09-05
 
 ### Added

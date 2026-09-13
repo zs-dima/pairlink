@@ -200,7 +200,7 @@ void main() {
       const guestNonce = 'Z3Vlc3Q=';
       final key = attackerKey(codeSecret(code), hostNonce, guestNonce, brand: kTestIdentity.brand);
       final body = <String, Object?>{'v': kPairlinkVersion, 't': 'hello', 'nonce': guestNonce};
-      attacker.line('{"nonce":"$guestNonce","t":"hello","v":3,"mac":"${signBody(key, body)}"}');
+      attacker.line('{"nonce":"$guestNonce","t":"hello","v":4,"mac":"${signBody(key, body)}"}');
 
       final welcome = await attacker.nextFrame();
       expect(welcome?['t'], equals('welcome'));
@@ -216,7 +216,7 @@ void main() {
       // for key derivation while the second is what got signed.
       final body = <String, Object?>{'v': kPairlinkVersion, 't': 'hello', 'nonce': guestNonce};
       attacker.line(
-        '{"v":3,"t":"hello","nonce":"c211Z2dsZWQ=","nonce":"$guestNonce","mac":"${signBody(key, body)}"}',
+        '{"v":4,"t":"hello","nonce":"c211Z2dsZWQ=","nonce":"$guestNonce","mac":"${signBody(key, body)}"}',
       );
 
       final answer = await attacker.nextFrame();
@@ -233,7 +233,7 @@ void main() {
       const guestNonce = 'Z3Vlc3Q=';
       final key = attackerKey(codeSecret(code), hostNonce, guestNonce, brand: kTestIdentity.brand);
       final body = <String, Object?>{'v': kPairlinkVersion, 't': 'hello', 'nonce': guestNonce};
-      attacker.line('{"v":3,"t":"\\u0068ello","nonce":"$guestNonce","mac":"${signBody(key, body)}"}');
+      attacker.line('{"v":4,"t":"\\u0068ello","nonce":"$guestNonce","mac":"${signBody(key, body)}"}');
 
       final welcome = await attacker.nextFrame();
       expect(welcome?['t'], equals('welcome'));

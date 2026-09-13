@@ -18,7 +18,18 @@ void main() {
       const Power(state: .lost, atMs: 900000, seq: 1, wallMs: 1700000000000),
       const Power(state: .restored, atMs: 908000, seq: 2),
       const Ack(7),
+      const Ping(3),
+      const Pong(3),
       const Bye(),
+      // Every scalar the wire allows, including the two a null check would confuse: a shared
+      // null, and `false`.
+      const Shared(key: 'relocating', value: true, n: 1),
+      const Shared(key: 'relocating', value: false, n: 2),
+      const Shared(key: 'brightness', value: 0.5, n: 3),
+      const Shared(key: 'breakers', value: 12, n: 4),
+      const Shared(key: 'room', value: 'kitchen', n: 5),
+      const Shared(key: 'cleared', value: null, n: 6),
+      const Signal(name: 'siren', n: 1),
     ];
 
     for (final frame in frames) {
@@ -50,9 +61,9 @@ void main() {
       'no type tag': (line: '{"code":"7392"}', reason: RejectReason.malformed),
       'unknown type': (line: '{"t":"exploit"}', reason: RejectReason.malformed),
       'type is not a string': (line: '{"t":7}', reason: RejectReason.malformed),
-      'hello without a nonce': (line: '{"v":3,"t":"hello"}', reason: RejectReason.malformed),
-      'hello with a numeric nonce': (line: '{"v":3,"t":"hello","nonce":7392}', reason: RejectReason.malformed),
-      'challenge without a nonce': (line: '{"v":3,"t":"challenge"}', reason: RejectReason.malformed),
+      'hello without a nonce': (line: '{"v":4,"t":"hello"}', reason: RejectReason.malformed),
+      'hello with a numeric nonce': (line: '{"v":4,"t":"hello","nonce":7392}', reason: RejectReason.malformed),
+      'challenge without a nonce': (line: '{"v":4,"t":"challenge"}', reason: RejectReason.malformed),
       'challenge without a version': (line: '{"t":"challenge","nonce":"x"}', reason: RejectReason.malformed),
       'power with a non-integer wall stamp': (
         line: '{"t":"power","state":"lost","ts":1,"seq":1,"wall":"noon"}',
@@ -71,6 +82,26 @@ void main() {
       ),
       'power with a null seq': (line: '{"t":"power","state":"lost","ts":1,"seq":null}', reason: RejectReason.malformed),
       'mac is not a string': (line: '{"t":"bye","mac":42}', reason: RejectReason.malformed),
+      'shared without a key': (line: '{"t":"shared","value":true,"n":1}', reason: RejectReason.malformed),
+      'shared without a counter': (line: '{"t":"shared","key":"k","value":true}', reason: RejectReason.malformed),
+      'shared with a float counter': (
+        line: '{"t":"shared","key":"k","value":true,"n":1.5}',
+        reason: RejectReason.malformed,
+      ),
+      // "absent" and "present and null" differ: the second round-trips, a missing field does not.
+      'shared with no value field at all': (line: '{"t":"shared","key":"k","n":1}', reason: RejectReason.malformed),
+      // The signature covers a canonicalization that sorts top-level keys only.
+      'shared with an object value': (
+        line: '{"t":"shared","key":"k","value":{"room":"kitchen"},"n":1}',
+        reason: RejectReason.malformed,
+      ),
+      'shared with an array value': (
+        line: '{"t":"shared","key":"k","value":[1,2],"n":1}',
+        reason: RejectReason.malformed,
+      ),
+      'signal without a name': (line: '{"t":"signal","n":1}', reason: RejectReason.malformed),
+      'signal without a counter': (line: '{"t":"signal","name":"siren"}', reason: RejectReason.malformed),
+      'signal with a numeric name': (line: '{"t":"signal","name":7,"n":1}', reason: RejectReason.malformed),
       'reject with an unknown reason': (line: '{"t":"reject","reason":"vibes"}', reason: RejectReason.malformed),
       'a future protocol version': (line: '{"v":99,"t":"hello","nonce":"x"}', reason: RejectReason.versionMismatch),
       // A phone running an older version must be told to update, not silently half-understood.

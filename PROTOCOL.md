@@ -13,7 +13,7 @@ Markers:
 RFC 2119 keywords (MUST / MUST NOT / SHOULD / MAY) are normative. The dartdoc is authoritative for
 API shape, this file for wire behaviour.
 
-Last verified against the code: 2026-09-04.
+Last verified against the code: 2026-09-13.
 
 ---
 
@@ -50,16 +50,16 @@ code.
 Line-delimited JSON over TCP (`FrameCodec`). Every body carries `t` (type); the envelope MAY carry
 `mac`, the HMAC over the body excluding `mac` itself, independent of key order and whitespace
 (`toBody` is signed, never the serialized line). Frame types: `challenge`, `hello`, `welcome`,
-`reject`, `power`, `ack`, `ping`, `pong`, `bye`.
+`reject`, `power`, `ack`, `ping`, `pong`, `bye`, `shared`, `signal`.
 
-**INVARIANT (kPairlinkVersion):** the version (3) is carried in `challenge`/`hello` and checked on
+**INVARIANT (kPairlinkVersion):** the version (4) is carried in `challenge`/`hello` and checked on
 receipt; a mismatch is a clean `Reject(versionMismatch)` with UI copy ("update the app"), never a
 mis-parse. **DELIBERATE:** strict bumps, with no capability negotiation. Pairing is ephemeral so
 nothing persisted needs migrating, a cross-version pair fails once at pairing time on a first-class
 path, and negotiation would switch the current fixes off for the likeliest mixed pair: a stale spare
 phone in the outlet.
 
-## 4. Handshake (v3)
+## 4. Handshake (v4)
 
 1. The outlet phone speaks first: unsigned `Challenge{v, nonce}`, a fresh 16-byte nonce per
    connection. The nonce is not a secret; sending it first makes the session key un-choosable by
@@ -69,7 +69,7 @@ phone in the outlet.
 3. The outlet verifies and answers `Welcome{device?}` (signed) or `Reject{reason}`.
 
 **INVARIANT (deriveKey):** HKDF-SHA256 (RFC 5869, extract-then-expand) over the pairing secret, with
-`salt = hostNonce|guestNonce` and `info = <brand>-pairlink-v3`, `<brand>` being
+`salt = hostNonce|guestNonce` and `info = <brand>-pairlink-v4`, `<brand>` being
 `PairIdentity.brand`. So neither side can fix the key alone, a captured handshake cannot be replayed
 onto another connection (the host nonce is fresh), and the secret never travels.
 
@@ -112,6 +112,30 @@ since possession is still proved per connection.
   coalesced; it would falsify the journal's transition count for no memory benefit at this cap.
 - **INVARIANT (seq):** `Power.seq` is a monotonic per-session counter carrying replay rejection,
   ordering, and exactly-once delivery after reconnect (`Ack.seq` = highest stored).
+
+### Application messages
+
+Two primitives for what this package deliberately knows nothing about. Both travel in either
+direction; pairlink carries the name and the value and reads neither.
+
+- **INVARIANT (Shared):** `shared{key, value, n}` is STATE, not history: re-asserted on every
+  `attach`, never queued, last writer wins. `value` MUST be a scalar (`bool`, `num`, `String`,
+  `null`) — the MAC covers a canonicalization that sorts top-level keys only, so a nested value
+  would be signed over a non-canonical form. **A receiver that ACTS on one MUST ignore a repeat:**
+  re-assertion means the link came back, not that anything changed, and one that restarts a timer
+  per delivery lets a flapping link extend it without end.
+- **INVARIANT (Signal):** `signal{name, n}` is a one-shot request: never stored, never queued,
+  dropped with the link. A command delivered late is executed at the wrong moment.
+- Both are signed like any post-handshake frame and join no unsigned-acceptance set; an unsigned one
+  would hand a stranger the application's controls.
+- **DELIBERATE:** `n` is per-CONNECTION and resets on `attach`, where `Power.seq` is per-session.
+  `Power` is replayed across connections so its counter must outlive them; these are never replayed,
+  and the key is derived per connection (§4), so a captured frame fails verification on the next.
+  Per-session would break the feature after a takeover (§6): the winner starts at 1 and every frame
+  it sends reads as stale.
+
+**PEER-CONTRACT:** an unknown `key` or `name` MUST be ignored, never refused — a peer that rejects a
+word it does not know turns an additive change into a breaking one.
 
 ## 7. Clocks
 

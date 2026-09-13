@@ -9,10 +9,11 @@ import 'package:meta/meta.dart';
 ///
 /// Version 2 moved the first word to the outlet phone ([Challenge]), took the pairing secret off
 /// the wire and added a monotonic stamp to [Power]; version 3 added heartbeats ([Ping]/[Pong])
-/// and staleness-gated takeover. The bump is strict, with no capability negotiation: pairing is
-/// ephemeral so nothing persisted needs migrating, and negotiation would switch the newer
-/// protections off for the most likely mixed pair, an old spare device left in the outlet.
-const int kPairlinkVersion = 3;
+/// and staleness-gated takeover; version 4 added the application messages [Shared] and [Signal].
+/// The bump is strict, with no capability negotiation: pairing is ephemeral so nothing persisted
+/// needs migrating, and negotiation would switch the newer protections off for the most likely
+/// mixed pair, an old spare device left in the outlet.
+const int kPairlinkVersion = 4;
 
 /// What the outlet phone observed.
 enum PowerState {
@@ -241,6 +242,58 @@ final class Pong extends PairFrame {
   Map<String, Object?> toBody() => <String, Object?>{'t': type, 'n': n};
 }
 
+/// A named value one peer shares with the other. Carried opaquely; this package never reads it.
+///
+/// STATE, not history: re-asserted on every reconnect rather than queued, so a peer that comes back
+/// learns the current value. Last writer wins.
+///
+/// A receiver that ACTS on one must ignore a repeat — re-assertion means the link came back, not
+/// that anything changed. One that restarts a timer per delivery lets a flapping link extend it
+/// without end.
+final class Shared extends PairFrame {
+  /// {@macro pair_frame}
+  const Shared({required this.key, required this.value, required this.n});
+
+  /// The application's name for this value. Unknown keys are ignored, never refused.
+  final String key;
+
+  /// A scalar: `bool`, `num`, `String` or null. The MAC covers a canonicalization that sorts
+  /// top-level keys only, so a nested value would be signed over a form the two sides need not
+  /// agree on.
+  final Object? value;
+
+  /// Per-connection monotonic counter; rejects same-connection replay.
+  final int n;
+
+  @override
+  String get type => 'shared';
+
+  // 'key'/'value' spelled out: 'v' is the protocol version in the handshake frames.
+  @override
+  Map<String, Object?> toBody() => <String, Object?>{'t': type, 'key': key, 'value': value, 'n': n};
+}
+
+/// A named one-shot request from one peer to the other. Carried opaquely, like [Shared].
+///
+/// Never stored, never queued, dropped with the link: a command delivered late is a command
+/// executed at the wrong moment. A request that must survive a reconnect is state — share it.
+final class Signal extends PairFrame {
+  /// {@macro pair_frame}
+  const Signal({required this.name, required this.n});
+
+  /// The application's name for this request. Unknown names are ignored, never refused.
+  final String name;
+
+  /// Per-connection monotonic counter; rejects same-connection replay.
+  final int n;
+
+  @override
+  String get type => 'signal';
+
+  @override
+  Map<String, Object?> toBody() => <String, Object?>{'t': type, 'name': name, 'n': n};
+}
+
 /// Orderly close. Advisory only: the session must survive the socket dying without one.
 final class Bye extends PairFrame {
   /// {@macro pair_frame}
@@ -318,6 +371,8 @@ abstract final class FrameCodec {
       'ping' => Ping(_int(json, 'n')),
       'pong' => Pong(_int(json, 'n')),
       'bye' => const Bye(),
+      'shared' => Shared(key: _string(json, 'key'), value: _scalar(json, 'value'), n: _int(json, 'n')),
+      'signal' => Signal(name: _string(json, 'name'), n: _int(json, 'n')),
       final t => throw FrameError(.malformed, 'unknown frame type "$t"'),
     };
 
@@ -381,6 +436,18 @@ abstract final class FrameCodec {
     if (value is int) return value;
     if (value == null) throw FrameError(.malformed, 'missing "$key"');
     throw FrameError(.malformed, '"$key" is ${value.runtimeType}, want int');
+  }
+
+  /// The only values [Shared] can carry.
+  ///
+  /// `Map` and `List` are refused: the MAC covers a canonicalization that sorts top-level keys
+  /// only. `containsKey`, not a null check — "absent" and "present and null" are different, and the
+  /// second is a value a peer deliberately shared.
+  static Object? _scalar(Map<String, Object?> json, String key) {
+    if (!json.containsKey(key)) throw FrameError(.malformed, 'missing "$key"');
+    final value = json[key];
+    if (value == null || value is bool || value is num || value is String) return value;
+    throw FrameError(.malformed, '"$key" is ${value.runtimeType}, want bool, num, String or null');
   }
 
   static int? _optionalInt(Map<String, Object?> json, String key) {
