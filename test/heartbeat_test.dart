@@ -424,6 +424,6 @@ final class _Wire implements PairTransport {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    if (!_inbox.isClosed) _inbox.close().ignore();
+    if (!_inbox.isClosed) unawaited(_inbox.close());
   }
 }

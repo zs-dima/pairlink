@@ -68,7 +68,7 @@ final class Hostile {
         .listen(_onLine, onError: (Object _) {}, onDone: _onDone);
     // A subject that hangs up mid-write surfaces the failure on `done`, not on `add`. Unhandled, it
     // takes the uninvited peer down instead of the subject.
-    _socket.done.then<void>((_) {}, onError: (Object _) => closedByPeer = true).ignore();
+    unawaited(_socket.done.then<void>((_) {}, onError: (Object _) => closedByPeer = true));
   }
 
   /// Takes over an accepted socket: the uninvited peer as server.

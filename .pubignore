@@ -10,3 +10,4 @@ AGENTS.md
 Makefile
 dart_test.yaml
 .metadata
+tool/

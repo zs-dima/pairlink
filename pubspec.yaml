@@ -25,7 +25,7 @@ platforms:
   windows:
 
 environment:
-  sdk: ^3.13.2
+  sdk: ^3.13.4
 
 dependencies:
   # HMAC-SHA256 for frame authentication and the HKDF session key.
@@ -35,4 +35,4 @@ dependencies:
 dev_dependencies:
   test: ^1.25.0
 
-  lints_tool: ^1.0.1
+  lints_tool: ^1.1.1

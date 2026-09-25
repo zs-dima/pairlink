@@ -841,8 +841,8 @@ final class _Wire implements PairTransport {
     // Not awaited: `close()` completes only once the done event has been delivered, so on a
     // controller nobody listened to it never completes. This matches SocketTransport; a double
     // more forgiving than the real thing hides the bugs it should find.
-    if (!_inbox.isClosed) _inbox.close().ignore();
-    if (!peer._inbox.isClosed) peer._inbox.close().ignore();
+    if (!_inbox.isClosed) unawaited(_inbox.close());
+    if (!peer._inbox.isClosed) unawaited(peer._inbox.close());
   }
 
   void _deliver(String line) {

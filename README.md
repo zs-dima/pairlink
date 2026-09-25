@@ -86,6 +86,27 @@ the production code; extend `hostile.dart` when probing, never the code under te
 under plain `dart test` on Linux as well as macOS and Windows, which matters: a peer that vanishes
 reports `done` on one and an error on another, and the attempt budget must not be spent by either.
 
+## Walking an app with one phone
+
+`tool/peer.dart` is the second phone, played by a computer: the same `pairlink`, so the same frames
+and version the app ships. It is not part of the published package.
+
+```sh
+# The phone stands at the panel: the computer listens, the phone opens the invite and dials it.
+dart run tool/peer.dart outlet --brand breakersonar --adb --open --script "wait; sleep 5; lost; sleep 5; restored; quit"
+
+# The phone goes in the outlet: read the QR it shows, then dial it.
+python tool/phone_invite.py > invite.txt
+dart run tool/peer.dart panel --brand breakersonar --adb --invite-file invite.txt --script "wait; sleep 120; quit"
+adb shell dumpsys battery unplug    # the phone's outlet loses power; `dumpsys battery reset` restores it
+```
+
+`--adb` carries the socket over USB (`adb reverse` / `adb forward`), so no shared Wi-Fi is needed.
+Commands, from `--script` or stdin: `wait`, `sleep <s>`, `lost`, `restored`, `share <key> <value>`,
+`signal <name>`, `quit`; every event is one `peer |` line. `phone_invite.py` needs OpenCV
+(`pip install opencv-python`). On Windows pass the invite in a file: `dart` is a batch file there,
+and cmd splits the invite's `&`.
+
 ## Install
 
 ```yaml

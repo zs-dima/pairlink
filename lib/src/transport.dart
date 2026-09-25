@@ -40,7 +40,7 @@ final class SocketTransport implements PairTransport {
         .listen(_onLine, onError: _onError, onDone: _onDone, cancelOnError: true);
     // Where an asynchronous write failure lands: `IOSink.writeln` does not throw on a dead peer,
     // it fails on the sink's own stream, so the `try` in [send] catches nothing.
-    _socket.done.then<void>((_) => close().ignore(), onError: (Object _) => close().ignore());
+    unawaited(_socket.done.then<void>((_) => unawaited(close()), onError: (Object _) => unawaited(close())));
   }
 
   final Socket _socket;
@@ -65,7 +65,7 @@ final class SocketTransport implements PairTransport {
     try {
       _socket.writeln(FrameCodec.encode(frame, mac: mac));
     } on Object {
-      close().ignore();
+      unawaited(close());
     }
   }
 
@@ -84,12 +84,12 @@ final class SocketTransport implements PairTransport {
     } on Object {
       // Already gone; nothing to do.
     }
-    _subscription?.cancel().ignore();
+    unawaited(_subscription?.cancel());
     _subscription = null;
     // Also not awaited: `StreamController.close()` completes only once the done event has been
     // delivered, so on a controller nobody listened to it never completes at all. That is the
     // ordinary case for a connection refused before the session subscribed.
-    if (!_controller.isClosed) _controller.close().ignore();
+    if (!_controller.isClosed) unawaited(_controller.close());
   }
 
   void _onLine(String line) {
@@ -109,13 +109,13 @@ final class SocketTransport implements PairTransport {
   /// must leave `isOpen` false, or the session holds a dead socket with no timeout anywhere and
   /// answers every reconnection `alreadyPaired`.
   void _onDone() {
-    if (!_controller.isClosed) _controller.close().ignore();
-    close().ignore();
+    if (!_controller.isClosed) unawaited(_controller.close());
+    unawaited(close());
   }
 
   void _onError(Object error, StackTrace stackTrace) {
     if (!_controller.isClosed) _controller.addError(error, stackTrace);
-    close().ignore();
+    unawaited(close());
   }
 }
 

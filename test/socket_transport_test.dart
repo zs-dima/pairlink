@@ -12,7 +12,7 @@ void main() {
   late ServerSocket server;
 
   setUp(() async => server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0));
-  tearDown(() async => server.close());
+  tearDown(() async => await server.close());
 
   /// A connected pair of transports over real loopback TCP.
   Future<({SocketTransport client, SocketTransport host, Socket rawClient})> connect() async {

@@ -423,7 +423,7 @@ final class OutletSession {
 
       case Bye():
         _emit(OutletPeerLeft(graceful: true, queued: _queue.length));
-        _detach().ignore();
+        unawaited(_detach());
 
       case Shared():
         if (frame.n <= connection.lastInN) return;
@@ -472,7 +472,7 @@ final class OutletSession {
       _idleTimer = null;
       _emit(OutletPeerLeft(graceful: false, queued: _queue.length));
       stale?.settle(false);
-      stale?.close().ignore();
+      unawaited(stale?.close());
     }
 
     connection
@@ -493,7 +493,7 @@ final class OutletSession {
       // Free the slot, keep the session: the queue and the sequence survive, so the returning
       // phone re-attaches and the replay lands exactly once.
       _emit(OutletPeerLeft(graceful: false, queued: _queue.length));
-      _detach().ignore();
+      unawaited(_detach());
     });
   }
 
@@ -521,7 +521,7 @@ final class OutletSession {
     // Release the slot: a peer that dies without a `bye` must not hold the session, or the
     // returning phone is answered `alreadyPaired` every time. The queue and the sequence are
     // per-session and survive; this ends one connection.
-    _detach().ignore();
+    unawaited(_detach());
   }
 
   /// Refuses one connection without spending the attempt budget. See [_refuseGuess].
@@ -831,7 +831,7 @@ final class PanelSession {
         // TWICE — and the second report arrived after the consumer had finished reacting to the
         // first, which bought a second reconnect budget (BreakerSonar, found on hardware
         // 2026-09-05).
-        _detach().ignore();
+        unawaited(_detach());
       },
     );
 
@@ -939,7 +939,7 @@ final class PanelSession {
 
       case Bye():
         _emit(const PanelDisconnected(graceful: true));
-        _detach().ignore();
+        unawaited(_detach());
 
       case Shared():
         if (frame.n <= _lastInN) return;
@@ -974,7 +974,7 @@ final class PanelSession {
     _idleTimer?.cancel();
     _idleTimer = Timer(idleTimeout, () {
       _emit(const PanelDisconnected());
-      _detach().ignore();
+      unawaited(_detach());
     });
   }
 
