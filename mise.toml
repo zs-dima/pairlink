@@ -1,0 +1,3 @@
+# dev_tool templates/dart-package/mise.toml @1.0.0
+[tools]
+just = "1.58.0"

@@ -36,7 +36,7 @@
   "explorer.fileNesting.patterns": {
     "pubspec.yaml": ".metadata, .dart_tool, .flutter-plugins-dependencies, pubspec.lock, pubspec_overrides.yaml, analysis_options.yaml, dart_test.yaml, .pubignore",
     ".gitignore": ".gitattributes, .gitmodules",
-    "README.md": "AGENTS.md, CHANGELOG.md, LICENSE, Makefile",
+    "README.md": "AGENTS.md, CHANGELOG.md, LICENSE, justfile, mise.toml",
     "*.dart": "$(capture).g.dart, $(capture).freezed.dart"
   }
 }

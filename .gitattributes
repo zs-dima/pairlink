@@ -1,0 +1,5 @@
+# dev_tool templates/dart-package/.gitattributes @1.0.0
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary

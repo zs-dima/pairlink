@@ -11,6 +11,8 @@ on:
       - "example/**"
       - "pubspec.yaml"
       - "analysis_options.yaml"
+      - "justfile"
+      - "mise.toml"
       - "dart_test.yaml"
   pull_request:
     paths:
@@ -21,6 +23,8 @@ on:
       - "example/**"
       - "pubspec.yaml"
       - "analysis_options.yaml"
+      - "justfile"
+      - "mise.toml"
       - "dart_test.yaml"
   workflow_dispatch:
 
@@ -30,5 +34,5 @@ concurrency:
 
 jobs:
   ci:
-    # One recipe for every package repository, pinned to a tag (zs-dima/lints_tool).
-    uses: zs-dima/lints_tool/.github/workflows/dart-package.yml@v1
+    # One recipe for every package repository, pinned to a tag (zs-dima/dev_tool).
+    uses: zs-dima/dev_tool/.github/workflows/dart-package.yml@v1

@@ -18,6 +18,10 @@ import 'package:pairlink/pairlink.dart';
 /// dart run tool/peer.dart panel --brand breakersonar --adb --invite-file invite.txt
 /// ```
 ///
+/// # The phone is the PANEL and pairs by a typed code: this computer listens on the LAN with the code the
+/// # phone shows as its secret; an mDNS advert of the brand's service (no `id`) lets the phone find it.
+/// dart run tool/peer.dart outlet --brand windowbird --code 1234 --port 47100
+///
 /// `--adb` needs no shared network: `adb reverse` (outlet) or `adb forward` (panel) carries the
 /// socket over USB, and the invite names 127.0.0.1. Without it the invite names this computer's
 /// first LAN address, and both must be on one network.
@@ -145,7 +149,9 @@ final class _Outlet extends _Peer {
       await server.close();
       return null;
     }
-    final session = OutletSession(identity: identity, secret: PairSecret.generate(), device: options.device);
+    final code = options.code;
+    final secret = code == null ? PairSecret.generate() : PairSecret.code(code);
+    final session = OutletSession(identity: identity, secret: secret, device: options.device);
     // Cancelled in [close]; the analyzer does not follow it into the field.
     // ignore: cancel_subscriptions
     final accepting = server.listen((socket) => unawaited(session.attach(SocketTransport(socket))));
@@ -289,6 +295,7 @@ final class _Options {
     required this.open,
     this.invite,
     this.script,
+    this.code,
   });
 
   final String mode;
@@ -299,6 +306,9 @@ final class _Options {
   final bool open;
   final String? invite;
   final String? script;
+
+  /// The digits a panel shows for a typed pairing: the outlet's secret instead of a generated one.
+  final String? code;
 
   static _Options? parse(List<String> args) {
     if (args.isEmpty || !const <String>{'outlet', 'panel'}.contains(args.first)) return null;
@@ -316,6 +326,7 @@ final class _Options {
       open: args.contains('--open'),
       invite: value('--invite') ?? _read(value('--invite-file')),
       script: value('--script'),
+      code: value('--code'),
     );
   }
 }
@@ -325,6 +336,6 @@ final class _Options {
 String? _read(String? path) => path == null ? null : File(path).readAsLinesSync().firstOrNull?.trim();
 
 const String _usage = '''
-usage: dart run tool/peer.dart outlet [--brand b] [--port n] [--adb] [--open] [--script "…"]
+usage: dart run tool/peer.dart outlet [--brand b] [--port n] [--adb] [--open] [--code digits] [--device d] [--script "…"]
        dart run tool/peer.dart panel (--invite <uri> | --invite-file <path>) [--brand b] [--adb] [--script "…"]
 commands: wait · sleep <s> · lost · restored · share <key> <value> · signal <name> · quit''';

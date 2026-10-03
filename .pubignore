@@ -7,7 +7,8 @@ reports/
 pubspec.lock
 pubspec_overrides.yaml
 AGENTS.md
-Makefile
+justfile
+mise.toml
 dart_test.yaml
 .metadata
 tool/
