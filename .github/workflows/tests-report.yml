@@ -11,7 +11,7 @@ jobs:
       contents: read
       actions: read
       checks: write
-    uses: zs-dima/dev_tool/.github/workflows/test-report.yml@v1
+    uses: zs-dima/dev_tool/.github/workflows/test-report.yml@v3
     with:
       reporter: dart-json
       path: "**/tests.json"
