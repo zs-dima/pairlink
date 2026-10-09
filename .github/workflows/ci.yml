@@ -35,4 +35,4 @@ concurrency:
 jobs:
   ci:
     # One recipe for every package repository, pinned to a tag (zs-dima/dev_tool).
-    uses: zs-dima/dev_tool/.github/workflows/dart-package.yml@v1
+    uses: zs-dima/dev_tool/.github/workflows/dart-package.yml@v3
